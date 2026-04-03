@@ -2351,6 +2351,15 @@
       }
     }
     
+    // Recalculate hours from Forecast view — wraps the existing recalculateEmployeeHours and refreshes Gantt
+    async function recalcFromForecast(employeeNumber, employeeName) {
+      await recalculateEmployeeHours(employeeNumber, employeeName);
+      // Refresh after a brief delay to let Supabase sync
+      setTimeout(() => {
+        renderGanttChart();
+      }, 1500);
+    }
+    
     function setForecastView(mode) {
       forecastViewMode = mode;
       
@@ -3253,6 +3262,7 @@
                   <p class="text-xs ${isOverallocated ? 'text-red-500 font-medium' : 'text-gray-400'}">
                     ${isOverallocated ? '⚠️ Up to ' + maxHours + ' hrs/wk' : emp.bars.length + ' project' + (emp.bars.length !== 1 ? 's' : '')}
                   </p>
+                  ${isOverallocated ? `<button onclick="recalcFromForecast('${emp.number}', '${emp.name.replace(/'/g, "\\'")}')" class="mt-1 text-xs px-2 py-0.5 bg-red-100 text-red-700 rounded hover:bg-red-200 font-medium">↻ Recalc to 40h</button>` : ''}
                 </div>
                 <div class="flex-1 relative" style="height: ${Math.max(50, emp.bars.length * 28 + 10)}px;">
                   <!-- Grid lines -->
