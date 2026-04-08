@@ -1667,19 +1667,31 @@
           customEnd: row.custom_end || ''
         }));
         
-        // Load actuals
-        const { data: actualsData, error: actError } = await db
-          .from('actuals')
-          .select('*');
+        // Load actuals (paginated — Supabase defaults to 1000 row limit)
+        let allActualsRaw = [];
+        let actualsFrom = 0;
+        const actualsPageSize = 1000;
+        while (true) {
+          const { data: actualsPage, error: actError } = await db
+            .from('actuals')
+            .select('*')
+            .range(actualsFrom, actualsFrom + actualsPageSize - 1);
+          
+          if (actError) throw actError;
+          if (!actualsPage || actualsPage.length === 0) break;
+          allActualsRaw = allActualsRaw.concat(actualsPage);
+          if (actualsPage.length < actualsPageSize) break;
+          actualsFrom += actualsPageSize;
+        }
         
-        if (actError) throw actError;
-        
-        allActuals = (actualsData || []).map(row => ({
+        allActuals = allActualsRaw.map(row => ({
           employeeNumber: row.employee_number,
           projectNumber: row.project_number,
           weekEnding: row.week_ending,
           actualHours: Number(row.actual_hours) || 0
         }));
+        
+        console.log('Loaded', allActuals.length, 'actuals records');
         
         // Load notifications
         const { data: notifData, error: notifError } = await db
