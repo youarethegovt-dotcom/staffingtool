@@ -1536,11 +1536,11 @@
       }
       
       try {
-        // Load employees (include null active values since CSV import may not set them)
+        // Load employees (include true and null active values)
         const { data: employeesData, error: empError } = await db
           .from('employees')
           .select('*')
-          .neq('active', false)
+          .or('active.eq.true,active.is.null')
           .order('name');
         
         if (empError) throw empError;
