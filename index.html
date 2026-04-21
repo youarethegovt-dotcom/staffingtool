@@ -899,12 +899,16 @@
                     <div id="editPMSuggestions" class="employee-suggestions hidden"></div>
                   </div>
                 </div>
-                <div class="mt-3 flex gap-2">
+                <div class="mt-3 flex gap-2 items-center">
                   <button onclick="saveProjectEdits()" id="saveProjectBtn" class="px-4 py-2 bg-blue-600 text-white rounded text-sm font-medium hover:bg-blue-700">
                     Save Changes
                   </button>
                   <button onclick="clearEditProjectForm()" class="px-4 py-2 bg-gray-200 text-gray-700 rounded text-sm">
                     Clear
+                  </button>
+                  <div class="flex-1"></div>
+                  <button onclick="archiveProject()" id="archiveProjectBtn" class="px-4 py-2 bg-red-50 border border-red-300 text-red-600 rounded text-sm font-medium hover:bg-red-100" title="Archive this project — hides it from all dropdowns but keeps historical data">
+                    🗄️ Archive Project
                   </button>
                 </div>
               </div>
@@ -1597,7 +1601,9 @@
         if (projError) throw projError;
         
         if (projectsData && projectsData.length > 0) {
-          PROJECTS = projectsData.map(p => ({
+          // Filter out archived projects (archived = true)
+          const activeProjects = projectsData.filter(p => !p.archived);
+          PROJECTS = activeProjects.map(p => ({
             number: p.project_number,
             name: p.project_name
           }));
@@ -1606,7 +1612,7 @@
           pmAssignments = {};
           dmAssignments = {};
           principalAssignments = {};
-          projectsData.forEach(p => {
+          activeProjects.forEach(p => {
             if (p.pm && p.pm.trim() !== '') {
               pmAssignments[p.project_number] = p.pm.trim();
             }
@@ -5020,6 +5026,65 @@
         btn.disabled = false;
         btn.textContent = 'Save Changes';
         showMooseAlert('Failed to save changes. Please try again.');
+      }
+    }
+    
+    async function archiveProject() {
+      if (!selectedEditProject) {
+        showMooseAlert('Please select a project to archive.');
+        return;
+      }
+      
+      const projectNumber = document.getElementById('editProjectNumber').value;
+      const projectName = document.getElementById('editProjectName').value;
+      
+      // Confirmation dialog
+      if (!confirm(`Archive "${projectNumber} - ${projectName}"?\n\nThis will hide it from all dropdowns and assignments. Historical data (hours, schedules) will be preserved.\n\nThis can be reversed later in Supabase by setting archived = false.`)) {
+        return;
+      }
+      
+      const btn = document.getElementById('archiveProjectBtn');
+      btn.disabled = true;
+      btn.textContent = 'Archiving...';
+      
+      try {
+        const response = await fetch(`${SUPABASE_URL}/rest/v1/projects?project_number=eq.${encodeURIComponent(projectNumber)}`, {
+          method: 'PATCH',
+          headers: {
+            'apikey': SUPABASE_ANON_KEY,
+            'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+            'Content-Type': 'application/json',
+            'Prefer': 'return=representation'
+          },
+          body: JSON.stringify({ archived: true })
+        });
+        
+        if (!response.ok) {
+          const errText = await response.text();
+          console.error('Failed to archive project:', response.status, errText);
+          throw new Error(errText);
+        }
+        
+        // Remove from local data
+        PROJECTS = PROJECTS.filter(p => p.number !== projectNumber);
+        delete pmAssignments[projectNumber];
+        delete dmAssignments[projectNumber];
+        delete principalAssignments[projectNumber];
+        
+        showMooseAlert(`Project "${projectNumber} - ${projectName}" has been archived.`);
+        clearEditProjectForm();
+        
+        // Refresh data
+        setTimeout(async () => {
+          await loadAllData();
+        }, 1000);
+        
+      } catch (err) {
+        console.error('Archive project error:', err);
+        showMooseAlert('Failed to archive project. Check browser console for details.');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = '🗄️ Archive Project';
       }
     }
     
