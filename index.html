@@ -4797,63 +4797,63 @@
       btn.disabled = true;
       btn.textContent = 'Adding...';
       
-      // OPTIMISTIC: Add to local data immediately
-      const newProject = {
-        number: projectNumber,
-        name: projectName
-      };
-      PROJECTS.push(newProject);
-      
-      if (projectPM) {
-        pmAssignments[projectNumber] = projectPM;
-      }
-      if (projectDM) {
-        dmAssignments[projectNumber] = projectDM;
-      }
-      if (projectPrincipal) {
-        principalAssignments[projectNumber] = projectPrincipal;
-      }
-      
-      // Send to Supabase
-      db
-        .from('projects')
-        .insert({
+      // Send to Supabase via direct REST API
+      try {
+        const insertBody = {
           project_number: projectNumber,
           project_name: projectName,
           principal: projectPrincipal || null,
           dm: projectDM || null,
           pm: projectPM || null
-        })
-        .then(({ error }) => {
-          if (error) {
-            console.error('Failed to add project:', error);
-            // Revert on failure
-            PROJECTS = PROJECTS.filter(p => p.number !== projectNumber);
-            delete pmAssignments[projectNumber];
-            delete dmAssignments[projectNumber];
-            delete principalAssignments[projectNumber];
-            showMooseAlert('Failed to add project. Please try again.');
-          }
+        };
+        
+        const response = await fetch(`${SUPABASE_URL}/rest/v1/projects`, {
+          method: 'POST',
+          headers: {
+            'apikey': SUPABASE_ANON_KEY,
+            'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+            'Content-Type': 'application/json',
+            'Prefer': 'return=representation'
+          },
+          body: JSON.stringify(insertBody)
         });
-      
-      // Show success and reset form
-      btn.textContent = '✓ Added!';
-      
-      setTimeout(() => {
+        
+        if (!response.ok) {
+          const errText = await response.text();
+          console.error('Failed to add project:', response.status, errText);
+          throw new Error(errText);
+        }
+        
+        // Success — update local data
+        PROJECTS.push({ number: projectNumber, name: projectName });
+        if (projectPM) pmAssignments[projectNumber] = projectPM;
+        if (projectDM) dmAssignments[projectNumber] = projectDM;
+        if (projectPrincipal) principalAssignments[projectNumber] = projectPrincipal;
+        
+        btn.textContent = '✓ Added!';
+        
+        setTimeout(() => {
+          btn.disabled = false;
+          btn.textContent = 'Add Project';
+          toggleAddProjectForm();
+          
+          // Select the new project
+          document.getElementById('teamsProjectSearch').value = `${projectNumber} - ${projectName}`;
+          selectedTeamProject = projectNumber;
+          onTeamsProjectChange();
+        }, 1000);
+        
+        // Background sync
+        setTimeout(async () => {
+          await loadAllData();
+        }, 2000);
+        
+      } catch (err) {
+        console.error('Add project error:', err);
         btn.disabled = false;
         btn.textContent = 'Add Project';
-        toggleAddProjectForm();
-        
-        // Optionally select the new project
-        document.getElementById('teamsProjectSearch').value = `${projectNumber} - ${projectName}`;
-        selectedTeamProject = projectNumber;
-        onTeamsProjectChange();
-      }, 1000);
-      
-      // Background sync
-      setTimeout(async () => {
-        await loadAllData();
-      }, 2000);
+        showMooseAlert('Failed to add project. Please try again. Check browser console for details.');
+      }
     }
     
     // ========== EDIT PROJECT (Admin) ==========
